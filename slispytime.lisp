@@ -8,7 +8,7 @@
 
 (in-package :wake)
 
-(load "wake-test.lisp")
+(load "test.lisp")
 
 (defconstant +min+ 60
   "A minute in seconds.")
@@ -21,7 +21,9 @@
   "The days of the week.")
 
 (defvar *time-in-bed* (+ (* 9 +hour+) (* 30 +min+))
-  "The amount of time that I should be in bed for.")
+  "The proposed amount of time to be asleep for.")
+
+(defparameter *now-timestamp* (get-universal-time))
 
 (defun date-string (timestamp)
   "Returns a human-readable date representation of TIMESTAMP."
@@ -41,16 +43,16 @@
     (format nil "~2,'0d:~2,'0d"
             hour minute)))
 
-(defun date-with-description (timestamp description tab-column)
-  "Prints TIMESTAMP formatted and labelled with DESCRIPTION, with a
-separation of TAB-COLUMN."
-  (format t (concatenate 'string
-                         "~a:~" (write-to-string tab-column)
-                         "t~a~%")
+(defun date-with-description (timestamp description tab-column print-p)
+  "Prints or returns TIMESTAMP formatted and labelled with
+DESCRIPTION, with a separation of TAB-COLUMN."
+  (format print-p (concatenate 'string
+                               "~a:~" (write-to-string tab-column)
+                               "t~a~%")
           description (date-string timestamp)))
 
-(defun timestamp-today (hour minute)
-  "Returns today's timestamp at HOUR and MINUTE."
+(defun adjust-timestamp (hour minute timestamp)
+  "Returns TIMESTAMP replaced with HOUR and MINUTE."
   (multiple-value-bind
         (parsed-second
          parsed-minute
@@ -58,20 +60,20 @@ separation of TAB-COLUMN."
          parsed-date
          parsed-month
          parsed-year)
-      (get-decoded-time)
+      (decode-universal-time timestamp)
     (encode-universal-time 0 minute hour
                            parsed-date parsed-month parsed-year)))
 
-(defun bedtime-when-wake-at (hour minute)
+(defun bedtime-when-wake-at (timestamp)
   "Returns the timestamp of HOUR and MINUTE of the current day, minus
 *TIME-IN-BED* to give a bedtime."
-  (- (timestamp-today hour minute)
+  (- timestamp
      *time-in-bed*))
 
-(defun waketime-when-sleep-at (hour minute)
+(defun waketime-when-sleep-at (timestamp)
   "Returns the timestamp of HOUR and MINUTE of the current day, plus
 *TIME-IN-BED* to give a waking-up time."
-  (+ (timestamp-today hour minute)
+  (+ timestamp
      *time-in-bed*))
 
 (defun today (timestamp)
@@ -84,13 +86,15 @@ separation of TAB-COLUMN."
 
 (defun wake-at (hour minute &optional (day-shift 'tomorrow))
   (let* ((bedtime (funcall day-shift (bedtime-when-wake-at hour minute)))
-         (waketime (funcall day-shift (timestamp-today hour minute)))
+         (waketime (funcall day-shift (adjust-timestamp hour minute
+                                                        *now-timestamp*)))
          (dress-down (- bedtime (* 15 +min+))))
     (date-with-description dress-down 'dress-down 12)
     (date-with-description bedtime 'bedtime 12)))
 
 (defun sleep-at (hour minute &optional (day-shift 'tomorrow))
-  (let* ((bedtime (funcall day-shift (timestamp-today hour minute)))
+  (let* ((bedtime (funcall day-shift (adjust-timestamp hour minute
+                                                       *now-timestamp*)))
          (waketime (funcall day-shift (waketime-when-sleep-at hour minute)))
          (dress-down (- bedtime (* 15 +min+))))
     (date-with-description dress-down 'dress-down 12)
